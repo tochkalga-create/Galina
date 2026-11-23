@@ -49,6 +49,7 @@
         source: 'https://www.nalog.gov.ru/rn77/ip/in_premip/'
       },
       lawUrl: 'https://www.nalog.gov.ru/rn77/promo/new2026/',
+      firstTaxPeriodUrl: 'https://nalog.garant.ru/fns/nk/0dacf58504c4847f1a1635db72279562/',
       regionalUrl: 'https://www.nalog.gov.ru/rn{code}/taxation/taxes/usn/',
       regionalOffice: { '83': '29' },
       objects: { income: 'Доходы', profit: 'Доходы минус расходы' },
@@ -171,6 +172,9 @@
     .section-note { margin-top: .45rem; }
     .fields { display: grid; gap: .85rem; margin: 1rem 0 1.4rem; }
     .field { display: grid; gap: .3rem; min-width: 0; }
+    .required-mark, .field-error { color: var(--warning); }
+    .field-error { font-size: .8125rem; line-height: 1.35; }
+    .field-error:empty { display: none; }
     label, legend { font-weight: 650; font-size: .9rem; }
     input, select, textarea, button { font: inherit; }
     input:not([type="checkbox"]), select, textarea {
@@ -184,7 +188,7 @@
       width: .5rem; height: .5rem; border: solid var(--accent); border-width: 0 2px 2px 0; transform: rotate(45deg);
     }
     :focus-visible { outline: 3px solid #ad435c; outline-offset: 3px; }
-    input[aria-invalid="true"] { border-color: var(--warning); }
+    input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--warning); background: #fff1eb; }
     fieldset { min-width: 0; margin: 0; padding: .65rem .8rem .8rem; border: 1px solid var(--line); border-radius: .65rem; }
     legend { padding-inline: .25rem; }
     .quarters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: .7rem; }
@@ -255,9 +259,20 @@
     .chart-key span { display: inline-flex; align-items: center; gap: .3rem; }
     .chart-key span::before { content: ""; width: .65rem; height: .65rem; border-radius: .15rem; background: var(--accent); }
     .chart-key span:last-child::before { background: #a96848; }
+    .chart-plot {
+      --chart-height: clamp(3.5rem, 8vw, 5rem);
+      display: grid; grid-template-columns: minmax(2.5rem, auto) minmax(0, 1fr);
+      align-items: start; gap: .35rem; margin: .6rem 0 .45rem;
+    }
+    .chart-axis { text-align: right; font-size: .72rem; line-height: 1; }
+    .chart-axis-title { display: block; margin-bottom: .15rem; }
+    .chart-ticks {
+      display: flex; flex-direction: column; justify-content: space-between;
+      height: var(--chart-height); font-variant-numeric: tabular-nums;
+    }
     .chart-bars {
       display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: .35rem; margin: .6rem 0 .45rem;
+      gap: .3rem;
     }
     .chart-quarter {
       display: grid; gap: .3rem; justify-items: center; min-height: 0; padding: .4rem .3rem;
@@ -269,7 +284,7 @@
     }
     .chart-quarter:disabled { background: #fbf1ea; border-color: var(--line); color: var(--muted); }
     .chart-track {
-      display: flex; align-items: end; gap: .15rem; width: min(78%, 3rem); height: clamp(3.5rem, 8vw, 5rem);
+      display: flex; align-items: end; gap: .15rem; width: min(78%, 3rem); height: var(--chart-height);
       border-radius: .35rem; background: #ead5cd;
     }
     .chart-fill {
@@ -279,6 +294,7 @@
     .chart-quarter[aria-pressed="true"] .chart-fill { background: var(--deep); }
     .chart-fill.chart-expense { background: #a96848; }
     .chart-quarter[aria-pressed="true"] .chart-expense { background: #8f5238; }
+    .chart-values { color: var(--muted); font-size: .625rem; line-height: 1.05; min-height: 1em; }
     .chart-readout { display: block; min-height: 3.4em; white-space: pre-line; }
     @media (prefers-reduced-motion: reduce) { .chart-fill { transition: none; } }
     .total-number { display: block; color: #fff; font-size: clamp(1.85rem, 5vw, 2.55rem); line-height: 1.12; font-weight: 750; margin-block: .25rem .5rem; overflow-wrap: anywhere; }
@@ -291,6 +307,7 @@
     .period-value { font-variant-numeric: tabular-nums; }
     .period-deadline { display: block; font-weight: 400; }
     .periods summary { display: flow-root list-item; }
+    .periods .breakdown-row:last-child { border-top: 1px solid var(--line); margin-top: .25rem; padding-top: .4rem; font-weight: 700; }
     .total-deadline { font-weight: 700; margin-bottom: .35rem; }
     dl { margin: 0; padding: 0 0 .6rem; }
     .breakdown-row { display: grid; grid-template-columns: 1fr auto; gap: .7rem; font-size: .875rem; padding: .24rem 0; }
@@ -354,26 +371,29 @@
       <section class="panel" aria-labelledby="inputHeading">
         <h2 id="inputHeading">Данные для расчёта</h2>
         <form id="taxForm" autocomplete="off">
+          <p class="note section-note"><span class="required-mark" aria-hidden="true">*</span> Обязательные поля для расчёта УСН</p>
           <div class="fields">
             <div class="field">
-              <label for="region">Регион регистрации</label>
-              <div class="select-wrap"><select id="region" required></select></div>
+              <label for="region">Регион регистрации <span class="required-mark" aria-hidden="true">*</span></label>
+              <div class="select-wrap"><select id="region" aria-describedby="regionError" required></select></div>
+              <p class="field-error" id="regionError" aria-live="polite"></p>
             </div>
             <div class="field">
-              <label for="taxObject">Объект УСН</label>
-              <div class="select-wrap"><select id="taxObject"></select></div>
+              <label for="taxObject">Объект УСН <span class="required-mark" aria-hidden="true">*</span></label>
+              <div class="select-wrap"><select id="taxObject" required></select></div>
             </div>
             <fieldset class="vat-input">
               <legend>НДС на начало года</legend>
               <div class="field">
                 <label for="vatOpening">Была ли обязанность начислять НДС?</label>
                 <div class="select-wrap">
-                  <select id="vatOpening">
+                  <select id="vatOpening" aria-describedby="vatOpeningHelp">
                     <option value="">Выберите ответ</option>
                     <option value="yes">Да</option>
                     <option value="no">Нет</option>
                   </select>
                 </div>
+                <p class="note" id="vatOpeningHelp"></p>
               </div>
             </fieldset>
           </div>
@@ -381,20 +401,26 @@
             <legend>Период действия ИП</legend>
             <p class="note" id="dateHelp">Если ИП уже был зарегистрирован на начало года, дату регистрации можно оставить пустой. Если ИП продолжает работу после конца года, оставьте дату закрытия пустой.</p>
             <div class="date-fields">
-              <div class="field"><label for="registered">Дата регистрации ИП</label><input id="registered" type="date" aria-describedby="dateHelp"></div>
-              <div class="field"><label for="closed">Дата закрытия ИП в расчётном году</label><input id="closed" type="date" aria-describedby="dateHelp"></div>
+              <div class="field"><label for="registered">Дата регистрации ИП</label><input id="registered" type="date" aria-describedby="dateHelp registeredError firstTaxPeriodDates"><p class="field-error" id="registeredError" aria-live="polite"></p></div>
+              <div class="field"><label for="closed">Дата закрытия ИП в расчётном году</label><input id="closed" type="date" aria-describedby="dateHelp closedError"><p class="field-error" id="closedError" aria-live="polite"></p></div>
+            </div>
+            <div id="firstTaxPeriod" class="contact-callout note" hidden>
+              <p id="firstTaxPeriodDates" role="status"></p>
+              <p id="firstTaxPeriodPayments"></p>
+              <a id="firstTaxPeriodSource" target="_blank" rel="noopener noreferrer">Пункт 2 статьи 55 НК РФ</a>
             </div>
           </fieldset>
           <section class="subfields" aria-labelledby="quarterHeading">
             <h3 id="quarterHeading">Доходы по кварталам</h3>
-            <p class="note section-note" id="inputHelp">Введите суммы отдельно за каждый квартал в пределах указанного периода. Пустые поля считаются нулевыми.</p>
+            <p class="note section-note" id="inputHelp">Введите суммы отдельно за каждый действующий квартал. Если доходов или расходов не было, укажите 0.</p>
             <div id="quarters" class="quarters"></div>
             <p id="incomeTotal" class="income-total"></p>
             <p id="expenseHelp" class="note section-note" hidden>Взносы ИП за себя за этот год калькулятор добавит автоматически.</p>
           </section>
           <div id="lossField" class="field subfields" hidden>
             <label for="loss">Убыток прошлых лет к зачёту за год, ₽</label>
-            <input id="loss" inputmode="decimal" placeholder="0" aria-describedby="lossHelp">
+            <input id="loss" inputmode="decimal" placeholder="0" aria-describedby="lossHelp lossError">
+            <p class="field-error" id="lossError" aria-live="polite"></p>
             <p id="lossHelp" class="note">Укажите переносимый убыток по УСН, если у вас есть право уменьшить на него годовую базу.</p>
           </div>
           <section id="contributions" class="contributions" aria-labelledby="contributionsHeading">
@@ -442,7 +468,13 @@
             <button id="chartTax" class="chart-mode" type="button" aria-pressed="false">Налог УСН</button>
           </div>
           <div id="chartKey" class="chart-key note" hidden><span>Доходы</span><span>Введённые расходы</span></div>
-          <div id="chartBars" class="chart-bars"></div>
+          <div class="chart-plot">
+            <div class="chart-axis note" aria-hidden="true">
+              <span class="chart-axis-title">₽</span>
+              <div class="chart-ticks"><span id="chartTop"></span><span id="chartMiddle"></span><span>0</span></div>
+            </div>
+            <div id="chartBars" class="chart-bars"></div>
+          </div>
           <output id="chartReadout" class="note chart-readout" aria-live="polite"></output>
         </section>
         <p class="note status" id="calculationStatus" role="status" hidden></p>
@@ -508,6 +540,7 @@
     const integerFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 });
     const amountFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
     const shareFormat = new Intl.NumberFormat('ru-RU', { style: 'percent', maximumFractionDigits: 1 });
+    const compactMoney = new Intl.NumberFormat('ru-RU', { notation: 'compact', maximumFractionDigits: 1 });
     const rubles = amount => integerFormat.format(amount) + ' ₽';
     const kopecks = amount => amountFormat.format(amount / 100) + ' ₽';
     const percent = rate => amountFormat.format(rate) + '%';
@@ -540,6 +573,9 @@
     get('year').textContent = 'Налоговый период · ' + CONFIG.year;
     get('sourceYear').textContent = CONFIG.year;
     get('federalSource').href = CONFIG.lawUrl;
+    get('firstTaxPeriodSource').href = CONFIG.firstTaxPeriodUrl;
+    get('vatOpeningHelp').textContent = '«Да» — например, доход за ' + (CONFIG.year - 1) + ' год был выше ' +
+      rubles(CONFIG.vat.currentLimit) + '. «Нет» — например, доход был в пределах этого лимита или ИП открыт в ' + CONFIG.year + ' году.';
     get('vatSource').href = CONFIG.vat.source;
     get('vatAdviceMessage').textContent = CONFIG.vat.advice;
     const { maxUrl, phone, phoneLabel, email } = CONFIG.contact;
@@ -571,24 +607,33 @@
       ...Object.entries(CONFIG.regions).sort((a, b) => a[1].localeCompare(b[1], 'ru'))
     ]);
 
-    function moneyField(title, fieldName, index, help = 'inputHelp') {
+    function moneyField(title, fieldName, index, help = 'inputHelp', required = false) {
       const field = element('div', undefined, 'field');
       const input = element('input');
       input.id = fieldName + index;
       input.inputMode = 'decimal';
       input.placeholder = '0';
-      input.setAttribute('aria-describedby', help);
+      input.required = required;
+      const error = element('p', '', 'field-error');
+      error.id = input.id + '-error';
+      error.setAttribute('aria-live', 'polite');
+      input.setAttribute('aria-describedby', help + ' ' + error.id);
       const label = element('label', title);
       label.htmlFor = input.id;
-      field.append(label, input);
+      if (required) {
+        const mark = element('span', ' *', 'required-mark');
+        mark.setAttribute('aria-hidden', 'true');
+        label.append(mark);
+      }
+      field.append(label, input, error);
       return { field, input };
     }
 
     const quarterInputs = CONFIG.periods.map((period, index) => {
       const group = element('fieldset');
       const fields = element('div', undefined, 'quarter-fields');
-      const income = moneyField('Доходы, ₽', 'income', index);
-      const expenses = moneyField('Расходы без взносов ИП за себя, ₽', 'expenses', index, 'expenseHelp');
+      const income = moneyField('Доходы, ₽', 'income', index, 'inputHelp', true);
+      const expenses = moneyField('Расходы без взносов ИП за себя, ₽', 'expenses', index, 'expenseHelp', true);
       fields.append(income.field, expenses.field);
       group.append(element('legend', period.input), element('p', period.months, 'note'), fields);
       const inactive = element('p', 'В этом квартале ИП не действовал.', 'note section-note');
@@ -608,10 +653,10 @@
       amount.append(value, deadline);
       summary.append(label, amount);
       details.append(summary, breakdown);
+      details.open = true;
       get('periods').append(details);
       return { details, label, value, deadline, breakdown };
     });
-    periodCards[annualIndex].details.open = true;
 
     let inspectedQuarter = -1;
     let chartMode = 'amounts';
@@ -626,15 +671,17 @@
       const expenseFill = element('span', undefined, 'chart-fill chart-expense');
       const shortName = period.input.replace(' квартал', ' кв.');
       const label = element('span', shortName);
+      const values = element('span', '', 'chart-values');
+      values.setAttribute('aria-hidden', 'true');
       track.setAttribute('aria-hidden', 'true');
       track.append(fill, expenseFill);
-      button.append(track, label);
+      button.append(track, label, values);
       button.addEventListener('click', () => {
         inspectedQuarter = index;
         showChartSelection();
       });
       get('chartBars').append(button);
-      return { button, fill, expenseFill, label, shortName, period: period.input, income: null, expense: null, result: null };
+      return { button, fill, expenseFill, label, values, shortName, period: period.input, income: null, expense: null, result: null };
     });
 
     for (const [id, mode] of [['chartAmounts', 'amounts'], ['chartTax', 'tax']]) {
@@ -685,6 +732,9 @@
       get('chartKey').hidden = !pairedBars;
       const maximum = Math.max(...chartBars.map(bar => taxMode ? Math.max(0, bar.result?.delta ?? 0)
         : Math.max(bar.income ?? 0, pairedBars ? bar.expense ?? 0 : 0)));
+      const divisor = taxMode ? 1 : 100;
+      get('chartTop').textContent = maximum ? compactMoney.format(maximum / divisor) : '';
+      get('chartMiddle').textContent = maximum ? compactMoney.format(maximum / (2 * divisor)) : '';
       let firstAvailable = -1;
       for (const [index, bar] of chartBars.entries()) {
         const amount = taxMode ? Math.max(0, bar.result?.delta ?? 0) : bar.income ?? 0;
@@ -697,6 +747,9 @@
           bar.expense === null ? '' : 'расходы ' + kopecks(bar.expense)
         ].filter(Boolean).join(', ');
         bar.label.textContent = label;
+        bar.values.textContent = !available ? '—' : taxMode ? compactMoney.format(amount)
+          : [bar.income, ...(pairedBars ? [bar.expense] : [])]
+            .map(value => value === null ? '—' : compactMoney.format(value / 100)).join(' / ');
         bar.button.disabled = !available;
         bar.button.setAttribute('aria-label', description);
         bar.fill.style.setProperty('--bar-height', maximum ? amount / maximum * 100 + '%' : '0%');
@@ -711,8 +764,7 @@
     function updateIncomeChart(quarters, results, activity, incomesValid, completedQuarters, profit) {
       chartShowsExpenses = profit;
       chartClosed = activity.closed;
-      chartInputsValid = activity.valid && incomesValid && (!profit || quarterInputs.every(({ expenses }, index) =>
-        !activity.active[index] || expenses.input.getAttribute('aria-invalid') !== 'true'));
+      chartInputsValid = activity.valid && incomesValid && (!profit || quarters.every(quarter => quarter.expenseValid));
       for (const [index, bar] of chartBars.entries()) {
         const active = chartInputsValid && activity.active[index];
         bar.income = active && completedQuarters[index] ? quarters[index].income : null;
@@ -722,12 +774,21 @@
       renderChart();
     }
 
-    function readMoney(input) {
+    const touchedFields = new Set();
+
+    function fieldError(input, errorId, message) {
+      input.setAttribute('aria-invalid', String(Boolean(message)));
+      get(errorId).textContent = message;
+    }
+
+    function readMoney(input, requiredNow = false, errorId = input.id + '-error') {
       const raw = input.value.trim().replace(/[ \u00a0\u202f]/g, '');
       const valid = raw === '' || /^\d+(?:[.,]\d{0,2})?$/.test(raw);
       const amount = valid ? Math.round(Number(raw.replace(',', '.')) * 100) : NaN;
       const acceptable = Number.isSafeInteger(amount) && amount <= 999_999_999_999;
-      input.setAttribute('aria-invalid', String(!acceptable));
+      const error = !acceptable ? 'Введите сумму от 0 ₽ с точностью до копеек.'
+        : requiredNow && !raw ? 'Введите сумму или укажите 0 ₽.' : '';
+      fieldError(input, errorId, error);
       return { amount: acceptable ? amount : 0, valid: acceptable };
     }
 
@@ -814,7 +875,7 @@
           continue;
         }
         const deadline = contributionDeadline(kind, activity);
-        const entered = partial ? readMoney(input) : { amount: card.fullAmount ?? 0, valid: true };
+        const entered = partial ? readMoney(input, true) : { amount: card.fullAmount ?? 0, valid: true };
         if (partial && (!entered.valid || !input.value.trim())) {
           input.setAttribute('aria-invalid', 'true');
           instruction.textContent = 'Укажите уже уплаченную сумму.';
@@ -861,16 +922,22 @@
       const closure = closed.value;
       const start = initial && initial > yearStart ? initial : yearStart;
       const end = closure || yearEnd;
-      const validStart = registered.validity.valid && (!initial || /^\d{4}-\d{2}-\d{2}$/.test(initial));
-      const validEnd = closed.validity.valid && end >= start;
-      registered.setAttribute('aria-invalid', String(!validStart));
-      closed.setAttribute('aria-invalid', String(!validEnd));
+      const validStart = registered.validity.valid && (!initial || /^\d{4}-\d{2}-\d{2}$/.test(initial) && initial <= yearEnd);
+      const validEnd = closed.validity.valid && (!closure || /^\d{4}-\d{2}-\d{2}$/.test(closure) &&
+        closure >= yearStart && closure <= yearEnd) && end >= start;
+      fieldError(registered, 'registeredError', validStart ? '' : 'Укажите дату регистрации не позднее ' + dateFormat.format(Date.parse(yearEnd)) + '.');
+      fieldError(closed, 'closedError', validEnd ? '' : 'Укажите дату в расчётном году, не раньше регистрации.');
       const from = Date.parse(start);
       const to = Date.parse(end);
       const active = quarterEnds.map((last, index) => from <= last && to >= (index ? quarterEnds[index - 1] + day : Date.parse(yearStart)));
       const spansYears = (!closure && initial >= CONFIG.year + '-12-01') ||
         (initial >= (CONFIG.year - 1) + '-12-01' && initial < yearStart);
-      return { from, to, closed: Boolean(closure), active, spansYears, valid: validStart && validEnd };
+      const valid = validStart && validEnd;
+      const firstTaxPeriod = valid && spansYears ? {
+        from: Date.parse(initial),
+        to: Date.parse(closure || (Number(initial.slice(0, 4)) + 1) + '-12-31')
+      } : null;
+      return { from, to, closed: Boolean(closure), active, firstTaxPeriod, valid };
     }
 
     function fixedContribution(from, to) {
@@ -934,8 +1001,12 @@
         const deduction = profit ? 0 : Math.min(rawTax, Math.round((fixed + additional) / 100));
         const minimum = profit && annual && rate !== 0 ? taxOn(income, CONFIG.minimumRate) : null;
         const accrued = Math.max(rawTax - deduction, minimum ?? 0);
+        const withoutContributions = profit
+          ? Math.max(taxOn(Math.max(0, income - expenses - (annual ? loss : 0)), rate), minimum ?? 0)
+          : rawTax;
+        const contributionBenefit = Math.max(0, withoutContributions - accrued);
         const result = {
-          income, expenses, fixed, additional, appliedLoss, base, rawTax, deduction,
+          income, expenses, fixed, additional, appliedLoss, base, rawTax, contributionBenefit,
           minimum, accrued, previous, delta: accrued - previous
         };
         previous = accrued;
@@ -949,8 +1020,9 @@
       rows.push(['Фиксированные взносы ИП в расчёте УСН', kopecks(result.fixed)]);
       if (result.additional) rows.push(['Дополнительный взнос ИП в расчёте УСН', kopecks(result.additional)]);
       if (result.appliedLoss) rows.push(['Зачтённый убыток', kopecks(result.appliedLoss)]);
-      rows.push(['Налоговая база', kopecks(result.base)], ['Налог по ставке ' + percent(rate), rubles(result.rawTax)]);
-      if (!profit) rows.push(['Уменьшение налога', rubles(result.deduction)]);
+      rows.push(['Налоговая база с начала года', kopecks(result.base)], ['Ставка УСН', percent(rate)],
+        ['Налог по ставке', rubles(result.rawTax)],
+        [profit ? 'Снижение налога за счёт взносов в расходах' : 'Уменьшение налога на взносы', rubles(result.contributionBenefit)]);
       if (result.minimum !== null) {
         rows.push(['Минимальный налог (' + percent(CONFIG.minimumRate) + ' от доходов)', rubles(result.minimum)]);
       }
@@ -980,13 +1052,8 @@
         (!activity.closed || quarterEnds[index] < activity.to);
     }
 
-    function contributionTaxSchedule(settings, quarters, results, contributionBaseValid) {
+    function contributionTaxSchedule(settings, results, contributionBaseValid) {
       const { activity, contributions } = settings;
-      const baseline = results.length ? calculate(quarters, {
-        ...settings,
-        splitAdditional: false,
-        contributions: { fixedByPeriod: quarterEnds.map(() => 0), additionalByPeriod: quarterEnds.map(() => 0) }
-      }) : [];
       return CONFIG.periods.flatMap((period, index) => {
         const final = index === annualIndex;
         if (!final && !countsAsAdvance(activity, index)) return [];
@@ -997,9 +1064,7 @@
         if (contributionBaseValid && (final || additional)) {
           amounts.push('дополнительный ' + kopecks(additional));
         }
-        if (results[index] && baseline[index]) {
-          amounts.push('налог меньше на ' + rubles(Math.max(0, baseline[index].accrued - results[index].accrued)));
-        }
+        if (results[index]) amounts.push('налог меньше на ' + rubles(results[index].contributionBenefit));
         return [[label, amounts.join(' · ')]];
       });
     }
@@ -1196,37 +1261,63 @@
 
       let amountsValid = true;
       let hasInput = false;
+      const lastEnteredQuarter = quarterInputs.findLastIndex(({ income, expenses }, index) =>
+        activity.active[index] && (income.input.value.trim() || (profit && expenses.input.value.trim())));
       const quarters = quarterInputs.map(({ fields, inactive, income, expenses }, index) => {
         const active = !activity.valid || activity.active[index];
         fields.hidden = !active;
         inactive.hidden = active;
         expenses.field.hidden = !profit;
-        if (!active) return { income: 0, expenses: 0 };
-        const revenue = readMoney(income.input);
-        const expense = profit ? readMoney(expenses.input) : { valid: true, amount: 0 };
+        income.input.required = active;
+        expenses.input.required = active && profit;
+        if (!active) return { income: 0, expenses: 0, incomeValid: true, expenseValid: true, complete: true };
+        const revenueEntered = Boolean(income.input.value.trim());
+        const expenseEntered = Boolean(expenses.input.value.trim());
+        const missingNow = index < lastEnteredQuarter;
+        const revenue = readMoney(income.input, touchedFields.has(income.input) || missingNow || (profit && expenseEntered));
+        const expense = profit ? readMoney(expenses.input, touchedFields.has(expenses.input) || missingNow || revenueEntered)
+          : { valid: true, amount: 0 };
         amountsValid = amountsValid && revenue.valid && expense.valid;
-        hasInput = hasInput || Boolean(income.input.value.trim() || (profit && expenses.input.value.trim()));
-        return { income: revenue.amount, expenses: expense.amount };
+        hasInput = hasInput || revenueEntered || (profit && expenseEntered);
+        return { income: revenue.amount, expenses: expense.amount, incomeValid: revenue.valid, expenseValid: expense.valid,
+          complete: revenueEntered && (!profit || expenseEntered) };
       });
+      fieldError(get('region'), 'regionError', !code && (hasInput || touchedFields.has(get('region'))) ? 'Выберите регион регистрации.' : '');
       const contributionBaseValid = amountsValid;
-      const loss = profit ? readMoney(get('loss')) : { valid: true, amount: 0 };
+      const loss = profit ? readMoney(get('loss'), false, 'lossError') : { valid: true, amount: 0 };
       amountsValid = amountsValid && loss.valid;
       const contributions = activity.valid
         ? calculateContributions(quarters, activity, profit, fixedPeriod.value, additionalPeriod.value) : null;
       const totalIncome = quarters.reduce((sum, quarter) => sum + quarter.income, 0);
-      const incomesValid = quarterInputs.every(({ income }, index) =>
-        !activity.active[index] || income.input.getAttribute('aria-invalid') !== 'true');
+      const incomesValid = quarters.every(quarter => quarter.incomeValid);
       const completedQuarters = quarterInputs.map(({ income }, index) =>
         !activity.active[index] || Boolean(income.input.value.trim()));
       get('incomeTotal').textContent = activity.valid && incomesValid
         ? 'Всего доходов за период — ' + kopecks(totalIncome) : '';
       const vat = vatStatus(quarters, activity, incomesValid, completedQuarters);
-      const ready = Boolean(code && hasInput && amountsValid && contributions && !activity.spansYears);
+      const firstPeriod = activity.firstTaxPeriod;
+      const firstPeriodDates = firstPeriod ? 'Первый налоговый период УСН — с ' + dateFormat.format(firstPeriod.from) +
+        ' по ' + dateFormat.format(firstPeriod.to) + ', если вы применяете УСН с даты регистрации.' : '';
+      get('firstTaxPeriod').hidden = !firstPeriod;
+      get('firstTaxPeriodDates').textContent = firstPeriodDates;
+      let firstPeriodPayments = '';
+      if (firstPeriod && !activity.closed) {
+        const endYear = new Date(firstPeriod.to).getUTCFullYear();
+        const advance = dateFormat.format(nextWorkday(Date.UTC(endYear, 3, CONFIG.taxDueDay)));
+        const final = dateFormat.format(nextWorkday(Date.UTC(endYear + 1, CONFIG.annualTaxDueMonth - 1, CONFIG.taxDueDay)));
+        firstPeriodPayments = 'Отдельного платежа за декабрь нет. Декабрьские доходы входят в аванс за I квартал ' +
+          endYear + ' года. Срок аванса — ' + advance + '. Итоговая доплата — до ' + final +
+          ' по действующим правилам, если есть налог к уплате.';
+      }
+      get('firstTaxPeriodPayments').textContent = firstPeriodPayments;
+      const ready = Boolean(code && hasInput && amountsValid && contributions && !firstPeriod);
       const settings = {
         rate, profit, loss: loss.amount, activity, contributions,
         splitAdditional: additionalPeriod.value === 'split'
       };
-      const results = ready ? calculate(quarters, settings) : [];
+      const completePeriods = quarters.map((_, index) => quarters.slice(0, index + 1).every(quarter => quarter.complete));
+      const computed = ready ? calculate(quarters, settings) : [];
+      const results = computed.map((result, index) => completePeriods[index] ? result : null);
       updateIncomeChart(quarters, results, activity, incomesValid, completedQuarters, profit);
       const annual = results[annualIndex];
       const finalLabel = activity.closed ? 'Налог при закрытии ИП' : 'Налог за год';
@@ -1242,7 +1333,7 @@
         : 'Сроки оплаты взносов от периода учёта в УСН не меняются.';
       get('paymentTaxNote').textContent = planNote;
 
-      const dueLabel = activity.closed ? 'Доплатить при закрытии ИП' : 'Доплатить по итогам года';
+      const dueLabel = firstPeriod ? 'Итоговый налог УСН' : activity.closed ? 'Доплатить при закрытии ИП' : 'Доплатить по итогам года';
       get('totalLabel').textContent = dueLabel;
       get('quickLabel').textContent = dueLabel;
       get('totalValue').textContent = annual ? rubles(Math.max(0, annual.delta)) : '—';
@@ -1254,13 +1345,13 @@
         ? finalLabel + ' — ' + rubles(annual.accrued) + ' · ' + rateLabel +
           ' · Начисленные авансы — ' + rubles(annual.previous) +
           (annual.delta < 0 ? ' · К уменьшению ' + rubles(-annual.delta) : '')
-        : code ? rateLabel : 'Выберите регион и заполните данные по кварталам.';
+        : firstPeriod ? 'Для расчёта УСН нужны данные за весь первый налоговый период. Здесь рассчитаны взносы за ' + CONFIG.year + ' год.'
+          : code ? rateLabel : 'Выберите регион и заполните данные по кварталам.';
       const status = !activity.valid ? 'Проверьте выделенные даты. Дата закрытия должна быть в расчётном году и не раньше даты регистрации.'
         : !amountsValid ? 'Проверьте выделенные суммы. Укажите неотрицательную сумму с точностью до копеек.'
-        : activity.spansYears ? 'При регистрации в декабре первый налоговый период УСН может охватывать два календарных года. Для указанных дат показаны только взносы за ' + CONFIG.year + ' год.'
-        : results.length && !annual ? 'Доход превысил лимит УСН ' + rubles(CONFIG.incomeLimit) + '. Для периода превышения и последующих периодов расчёт недоступен.'
-        : ready && quarterInputs.some(({ income }, index) => activity.active[index] && !income.input.value.trim())
-          ? 'Кварталы без введённых доходов посчитаны с доходом 0 ₽. Для окончательного расчёта проверьте все кварталы.'
+        : ready && completePeriods[annualIndex] && !annual ? 'Доход превысил лимит УСН ' + rubles(CONFIG.incomeLimit) + '. Для периода превышения и последующих периодов расчёт недоступен.'
+        : ready && !completePeriods[annualIndex]
+          ? 'Для итогового налога заполните все действующие кварталы. Если суммы не было, укажите 0 ₽.'
           : '';
       get('calculationStatus').textContent = status;
       get('calculationStatus').hidden = !status;
@@ -1271,6 +1362,7 @@
         'ИП без сотрудников', CONFIG.regions[code], 'УСН «' + CONFIG.objects[object] + '»', ready ? rateLabel.toLowerCase() : ''
       ].filter(Boolean).join(' · ')];
       if (annual) report.push(dueLabel + ' — ' + rubles(Math.max(0, annual.delta)), taxDeadlineText(annual, annualIndex, activity));
+      if (firstPeriod) report.push(...[firstPeriodDates, firstPeriodPayments, get('totalHint').textContent].filter(Boolean));
       if (contributions && contributionBaseValid) report.push('', 'Доходы по кварталам',
         ...quarters.flatMap((quarter, index) => activity.active[index]
           ? [CONFIG.periods[index].input + ' — ' + kopecks(quarter.income)] : []),
@@ -1306,8 +1398,8 @@
         else if (settings.splitAdditional && annual && contributions.additional > annual.additional) {
           contributionNote += ' Дополнительный взнос к учёту в следующем году — ' + kopecks(contributions.additional - annual.additional) + '.';
         }
-        const taxRows = activity.spansYears ? [] : contributionTaxSchedule(settings, quarters, results, contributionBaseValid);
-        if (activity.spansYears) contributionNote = 'График учёта в УСН недоступен для первого налогового периода, охватывающего два года.';
+        const taxRows = firstPeriod ? [] : contributionTaxSchedule(settings, results, contributionBaseValid);
+        if (firstPeriod) contributionNote = 'Взносы рассчитаны за ' + CONFIG.year + ' год.';
         get('contributionDates').textContent = dates;
         get('contributionHelp').textContent = contributionNote;
         fillList(get('contributionValues'), rows);
@@ -1323,11 +1415,12 @@
         card.details.hidden = noAdvance;
         card.label.textContent = isFinal && activity.closed ? 'При закрытии ИП' : CONFIG.periods[index].result;
         card.value.textContent = result ? payment(result) : '—';
-        card.deadline.textContent = result ? taxDeadlineText(result, index, activity) : '';
+        card.deadline.textContent = result ? taxDeadlineText(result, index, activity)
+          : ready && !completePeriods[index] ? 'Укажите суммы за все кварталы периода.' : '';
         const rows = result ? breakdown(result, rate, profit, index) : [];
         fillList(card.breakdown, rows);
         if (ready && !noAdvance) report.push('', card.label.textContent, ...rows.map(row => row.join(' — ')),
-          result ? card.deadline.textContent : 'Лимит доходов УСН превышен.');
+          card.deadline.textContent || 'Лимит доходов УСН превышен.');
       }
 
       get('regional').hidden = !code;
@@ -1339,7 +1432,8 @@
       get('scenarios').replaceChildren(...availableScenarios.map(scenario => {
         const scenarioRate = scenario[object];
         const inRange = !scenario.maxIncome || results.at(-1)?.income <= scenario.maxIncome * 100;
-        const alternative = ready && inRange ? calculate(quarters, { ...settings, rate: scenarioRate }) : [];
+        const alternative = ready && inRange ? calculate(quarters, { ...settings, rate: scenarioRate })
+          .map((result, index) => completePeriods[index] ? result : null) : [];
         const details = element('details', undefined, 'scenario');
         const title = scenario.label + ' · ' + percent(scenarioRate);
         const info = scenario.conditions + (ready && !inRange ? ' По введённым данным лимит этой льготы превышен либо расчёт за год недоступен.' : '');
@@ -1390,6 +1484,11 @@
 
     get('taxForm').addEventListener('submit', event => event.preventDefault());
     get('taxForm').addEventListener('input', update);
+    get('taxForm').addEventListener('focusout', event => {
+      if (!event.target.required || event.target.value.trim()) return;
+      touchedFields.add(event.target);
+      update();
+    });
     get('paymentPlanner').addEventListener('input', update);
     get('vatMonth').addEventListener('change', update);
     get('applyRecommendation').addEventListener('click', () => {
