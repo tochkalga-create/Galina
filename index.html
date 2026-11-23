@@ -407,7 +407,7 @@
             <div id="firstTaxPeriod" class="contact-callout note" hidden>
               <p id="firstTaxPeriodDates" role="status"></p>
               <p id="firstTaxPeriodPayments"></p>
-              <a id="firstTaxPeriodSource" target="_blank" rel="noopener noreferrer">Пункт 2 статьи 55 НК РФ</a>
+              <a id="firstTaxPeriodSource" target="_blank" rel="noopener noreferrer">Пункт 4 статьи 55 НК РФ</a>
             </div>
           </fieldset>
           <section class="subfields" aria-labelledby="quarterHeading">
@@ -930,14 +930,9 @@
       const from = Date.parse(start);
       const to = Date.parse(end);
       const active = quarterEnds.map((last, index) => from <= last && to >= (index ? quarterEnds[index - 1] + day : Date.parse(yearStart)));
-      const spansYears = (!closure && initial >= CONFIG.year + '-12-01') ||
-        (initial >= (CONFIG.year - 1) + '-12-01' && initial < yearStart);
       const valid = validStart && validEnd;
-      const firstTaxPeriod = valid && spansYears ? {
-        from: Date.parse(initial),
-        to: Date.parse(closure || (Number(initial.slice(0, 4)) + 1) + '-12-31')
-      } : null;
-      return { from, to, closed: Boolean(closure), active, firstTaxPeriod, valid };
+      const registeredInDecember = valid && initial >= CONFIG.year + '-12-01';
+      return { from, to, closed: Boolean(closure), active, registeredInDecember, valid };
     }
 
     function fixedContribution(from, to) {
@@ -1295,22 +1290,17 @@
       get('incomeTotal').textContent = activity.valid && incomesValid
         ? 'Всего доходов за период — ' + kopecks(totalIncome) : '';
       const vat = vatStatus(quarters, activity, incomesValid, completedQuarters);
-      const firstPeriod = activity.firstTaxPeriod;
-      const firstPeriodDates = firstPeriod ? 'Первый налоговый период УСН — с ' + dateFormat.format(firstPeriod.from) +
-        ' по ' + dateFormat.format(firstPeriod.to) + ', если вы применяете УСН с даты регистрации.' : '';
-      get('firstTaxPeriod').hidden = !firstPeriod;
+      const { registeredInDecember } = activity;
+      const firstPeriodDates = registeredInDecember ? 'Первый налоговый период УСН — с ' + dateFormat.format(activity.from) +
+        ' по ' + dateFormat.format(activity.to) + ', если вы применяете УСН с даты регистрации.' : '';
+      get('firstTaxPeriod').hidden = !registeredInDecember;
       get('firstTaxPeriodDates').textContent = firstPeriodDates;
-      let firstPeriodPayments = '';
-      if (firstPeriod && !activity.closed) {
-        const endYear = new Date(firstPeriod.to).getUTCFullYear();
-        const advance = dateFormat.format(nextWorkday(Date.UTC(endYear, 3, CONFIG.taxDueDay)));
-        const final = dateFormat.format(nextWorkday(Date.UTC(endYear + 1, CONFIG.annualTaxDueMonth - 1, CONFIG.taxDueDay)));
-        firstPeriodPayments = 'Отдельного платежа за декабрь нет. Декабрьские доходы входят в аванс за I квартал ' +
-          endYear + ' года. Срок аванса — ' + advance + '. Итоговая доплата — до ' + final +
-          ' по действующим правилам, если есть налог к уплате.';
-      }
+      const firstPeriodPayments = registeredInDecember
+        ? 'За этот период рассчитывается итоговый налог УСН за ' + CONFIG.year + ' год. Если есть сумма к уплате, срок — ' +
+          dateFormat.format(taxDeadline(annualIndex, activity)) + '.'
+        : '';
       get('firstTaxPeriodPayments').textContent = firstPeriodPayments;
-      const ready = Boolean(code && hasInput && amountsValid && contributions && !firstPeriod);
+      const ready = Boolean(code && hasInput && amountsValid && contributions);
       const settings = {
         rate, profit, loss: loss.amount, activity, contributions,
         splitAdditional: additionalPeriod.value === 'split'
@@ -1333,7 +1323,7 @@
         : 'Сроки оплаты взносов от периода учёта в УСН не меняются.';
       get('paymentTaxNote').textContent = planNote;
 
-      const dueLabel = firstPeriod ? 'Итоговый налог УСН' : activity.closed ? 'Доплатить при закрытии ИП' : 'Доплатить по итогам года';
+      const dueLabel = activity.closed ? 'Доплатить при закрытии ИП' : 'Доплатить по итогам года';
       get('totalLabel').textContent = dueLabel;
       get('quickLabel').textContent = dueLabel;
       get('totalValue').textContent = annual ? rubles(Math.max(0, annual.delta)) : '—';
@@ -1345,8 +1335,7 @@
         ? finalLabel + ' — ' + rubles(annual.accrued) + ' · ' + rateLabel +
           ' · Начисленные авансы — ' + rubles(annual.previous) +
           (annual.delta < 0 ? ' · К уменьшению ' + rubles(-annual.delta) : '')
-        : firstPeriod ? 'Для расчёта УСН нужны данные за весь первый налоговый период. Здесь рассчитаны взносы за ' + CONFIG.year + ' год.'
-          : code ? rateLabel : 'Выберите регион и заполните данные по кварталам.';
+        : code ? rateLabel : 'Выберите регион и заполните данные по кварталам.';
       const status = !activity.valid ? 'Проверьте выделенные даты. Дата закрытия должна быть в расчётном году и не раньше даты регистрации.'
         : !amountsValid ? 'Проверьте выделенные суммы. Укажите неотрицательную сумму с точностью до копеек.'
         : ready && completePeriods[annualIndex] && !annual ? 'Доход превысил лимит УСН ' + rubles(CONFIG.incomeLimit) + '. Для периода превышения и последующих периодов расчёт недоступен.'
@@ -1362,7 +1351,7 @@
         'ИП без сотрудников', CONFIG.regions[code], 'УСН «' + CONFIG.objects[object] + '»', ready ? rateLabel.toLowerCase() : ''
       ].filter(Boolean).join(' · ')];
       if (annual) report.push(dueLabel + ' — ' + rubles(Math.max(0, annual.delta)), taxDeadlineText(annual, annualIndex, activity));
-      if (firstPeriod) report.push(...[firstPeriodDates, firstPeriodPayments, get('totalHint').textContent].filter(Boolean));
+      if (registeredInDecember) report.push(firstPeriodDates, firstPeriodPayments);
       if (contributions && contributionBaseValid) report.push('', 'Доходы по кварталам',
         ...quarters.flatMap((quarter, index) => activity.active[index]
           ? [CONFIG.periods[index].input + ' — ' + kopecks(quarter.income)] : []),
@@ -1398,8 +1387,7 @@
         else if (settings.splitAdditional && annual && contributions.additional > annual.additional) {
           contributionNote += ' Дополнительный взнос к учёту в следующем году — ' + kopecks(contributions.additional - annual.additional) + '.';
         }
-        const taxRows = firstPeriod ? [] : contributionTaxSchedule(settings, results, contributionBaseValid);
-        if (firstPeriod) contributionNote = 'Взносы рассчитаны за ' + CONFIG.year + ' год.';
+        const taxRows = contributionTaxSchedule(settings, results, contributionBaseValid);
         get('contributionDates').textContent = dates;
         get('contributionHelp').textContent = contributionNote;
         fillList(get('contributionValues'), rows);
